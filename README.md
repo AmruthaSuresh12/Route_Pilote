@@ -1,6 +1,6 @@
 # Route Pilote 🧭
 
-**A Bloomberg Terminal for your supply chain.** Built for **InnovaHack Chapter 1 (Elite Forums)**.
+**A Bloomberg Terminal for your supply chain.
 
 Route Pilote predicts supply-chain disruptions, freight cost increases and shipping delays *before*
 they impact a shipment. Enter a product, origin, destination, weight and ship date — a fleet of AI
