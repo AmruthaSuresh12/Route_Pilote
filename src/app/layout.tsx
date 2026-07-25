@@ -13,7 +13,7 @@ const instrumentSerif = Instrument_Serif({
 export const metadata: Metadata = {
   title: "Route Pilote — Supply Chain Risk Intelligence",
   description:
-    "AI-powered logistics intelligence that predicts supply chain disruptions, freight cost increases and shipping delays before they impact your shipments. Powered by Mistral AI and Tavily.",
+    "AI-powered logistics intelligence that predicts supply chain disruptions, freight cost increases and shipping delays before they impact your shipments. Powered by Google Gemini and Tavily.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

@@ -1,6 +1,6 @@
-// Gemini/Mistral AI wrapper used by the agent layer.
-// Both Gemini and Mistral expose an OpenAI-compatible REST API, so we use the `openai` npm
-// package pointed at their respective endpoints.
+// Google Gemini wrapper used by the agent layer.
+// Google Gemini exposes an OpenAI-compatible REST API, so we use the `openai` npm
+// package pointed at the Gemini endpoint.
 //
 // Exported interface is identical to the former OpenAI version so agents.ts,
 // orchestrator.ts etc. need zero import or call-site changes.
@@ -23,7 +23,7 @@ const client = apiKey
   : null;
 
 /**
- * Ask Mistral for a JSON object matching the described shape.
+ * Ask Google Gemini for a JSON object matching the described shape.
  * Returns `fallback` if the API is unavailable or the response can't be parsed.
  */
 export async function jsonCompletion<T>(opts: {
