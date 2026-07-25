@@ -21,7 +21,6 @@ import {
   AlertTriangle,
   Anchor,
   ArrowDownRight,
-  ArrowRight,
   ArrowUpRight,
   Check,
   CheckCircle2,
@@ -213,7 +212,11 @@ export function Dashboard({ result }: { result: AnalysisResult }) {
   const toggleDone = (i: number) =>
     setDoneItems((prev) => {
       const next = new Set(prev);
-      next.has(i) ? next.delete(i) : next.add(i);
+      if (next.has(i)) {
+        next.delete(i);
+      } else {
+        next.add(i);
+      }
       return next;
     });
   const URGENCY: Record<string, string> = {

@@ -61,6 +61,7 @@ export function IntakeChat({
   // Time-aware greeting on the client.
   useEffect(() => {
     const h = new Date().getHours();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setHello(h < 12 ? "Good morning." : h < 18 ? "Good afternoon." : "Good evening.");
   }, []);
 

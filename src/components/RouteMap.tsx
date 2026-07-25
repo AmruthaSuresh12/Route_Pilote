@@ -120,7 +120,7 @@ export function RouteMap({ geo, ports = [] }: { geo: RouteGeo; ports?: PortOptio
         mapRef.current = null;
       }
     };
-  }, [geo]);
+  }, [geo, ports]);
 
   return <div ref={elRef} className="h-72 w-full rounded-xl overflow-hidden border border-border" />;
 }

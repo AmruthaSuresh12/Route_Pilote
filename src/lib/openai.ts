@@ -1,20 +1,24 @@
-// Mistral AI wrapper used by the agent layer.
-// Mistral exposes an OpenAI-compatible REST API, so we use the `openai` npm
-// package pointed at https://api.mistral.ai/v1 — no additional SDK needed.
+// Gemini/Mistral AI wrapper used by the agent layer.
+// Both Gemini and Mistral expose an OpenAI-compatible REST API, so we use the `openai` npm
+// package pointed at their respective endpoints.
 //
 // Exported interface is identical to the former OpenAI version so agents.ts,
 // orchestrator.ts etc. need zero import or call-site changes.
 
 import OpenAI from "openai";
 
-const apiKey = process.env.MISTRAL_API_KEY || "";
-export const MODEL = process.env.MISTRAL_MODEL || "mistral-small-latest";
+const apiKey = process.env.GEMINI_API_KEY || process.env.MISTRAL_API_KEY || "";
+export const MODEL = process.env.GEMINI_MODEL || process.env.MISTRAL_MODEL || (process.env.GEMINI_API_KEY ? "gemini-2.5-flash" : "mistral-small-latest");
 export const hasOpenAI = Boolean(apiKey); // kept for backward compat (used nowhere externally)
+
+const baseURL = process.env.GEMINI_API_KEY
+  ? "https://generativelanguage.googleapis.com/v1beta/openai/"
+  : "https://api.mistral.ai/v1";
 
 const client = apiKey
   ? new OpenAI({
       apiKey,
-      baseURL: "https://api.mistral.ai/v1",
+      baseURL,
     })
   : null;
 
@@ -42,7 +46,7 @@ export async function jsonCompletion<T>(opts: {
     if (!raw) return opts.fallback;
     return JSON.parse(raw) as T;
   } catch (err) {
-    console.error("[mistral] jsonCompletion failed:", err);
+    console.error("[openai-compatible] jsonCompletion failed:", err);
     return opts.fallback;
   }
 }
@@ -65,7 +69,7 @@ export async function textCompletion(opts: {
     });
     return res.choices[0]?.message?.content?.trim() || opts.fallback;
   } catch (err) {
-    console.error("[mistral] textCompletion failed:", err);
+    console.error("[openai-compatible] textCompletion failed:", err);
     return opts.fallback;
   }
 }

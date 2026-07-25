@@ -35,8 +35,6 @@ export function Header({ dataMode }: { dataMode?: "live" | "mock" }) {
               {dataMode === "live" ? "● LIVE DATA" : "● DEMO DATA"}
             </span>
           )}
-          <span className="text-muted hidden sm:inline">powered by</span>
-          <span className="text-accent-2 font-semibold">Tavily</span>
         </div>
       </div>
     </header>

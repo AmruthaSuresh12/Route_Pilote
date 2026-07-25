@@ -118,24 +118,22 @@ export async function runAnalysis(
       return null;
     });
 
-  // --- Step 2: intelligence agents in parallel ---
+  // --- Step 2: intelligence agents in batched parallel to respect API rate limits ---
   const specs = buildIntelSpecs(input, profile);
   const context = `${input.product} (${profile.productCategory}), ${input.weightKg}kg, ${input.origin} -> ${input.destination}, ship date ${input.shipDate}`;
 
   specs.forEach((s) => emit({ type: "agent", id: s.id, name: s.name, status: "running" }));
 
-  const factorResults = await Promise.all(
-    specs.map(async (spec) => {
-      try {
-        const { factor } = await intelAgent(spec, context);
-        emit({ type: "agent", id: spec.id, name: spec.name, status: "done", summary: `risk ${factor.score}/100 · ${factor.label}` });
-        return factor;
-      } catch (err) {
-        emit({ type: "agent", id: spec.id, name: spec.name, status: "error", summary: String(err) });
-        return null;
-      }
-    }),
-  );
+  const factorResults = await allInBatches(specs, 3, async (spec) => {
+    try {
+      const { factor } = await intelAgent(spec, context);
+      emit({ type: "agent", id: spec.id, name: spec.name, status: "done", summary: `risk ${factor.score}/100 · ${factor.label}` });
+      return factor;
+    } catch (err) {
+      emit({ type: "agent", id: spec.id, name: spec.name, status: "error", summary: String(err) });
+      return null;
+    }
+  });
   const factors = factorResults.filter(Boolean) as RiskFactor[];
 
   const riskScore = weightedRiskScore(factors);
@@ -245,4 +243,18 @@ function dedupe(sources: Source[]): Source[] {
     seen.add(s.url);
     return true;
   });
+}
+
+async function allInBatches<T, R>(
+  items: T[],
+  batchSize: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = [];
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize);
+    const batchResults = await Promise.all(batch.map(fn));
+    results.push(...batchResults);
+  }
+  return results;
 }
