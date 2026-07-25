@@ -2,12 +2,9 @@
 
 **A Bloomberg Terminal for your supply chain.**
 
-Route Pilote predicts supply-chain disruptions, freight cost increases and shipping delays *before*
-they impact a shipment. Enter a product, origin, destination, weight and ship date — a fleet of AI
-agents scans live web intelligence (via Tavily) and returns a single actionable risk score,
-cost/delay forecasts, route optimization and recommended actions.
+Route Pilote predicts supply-chain disruptions, freight cost increases and shipping delays *before* they impact a shipment. Enter a product, origin, destination, weight and ship date — a fleet of AI agents scans live web intelligence (via Tavily) and returns a single actionable risk score, cost/delay forecasts, route optimization and recommended actions.
 
-![flow](https://img.shields.io/badge/agents-12-2dd4bf) ![data](https://img.shields.io/badge/intelligence-Tavily-38bdf8)
+![flow](https://img.shields.io/badge/agents-12-2dd4bf) ![data](https://img.shields.io/badge/intelligence-Tavily-38bdf8) ![llm](https://img.shields.io/badge/reasoning-Gemini-ea4335)
 
 ---
 
@@ -31,27 +28,21 @@ Input a shipment → Route Pilote runs a multi-agent pipeline:
 | Port Recommendation | Live congestion comparison across alternative entry ports |
 | Tariff & Regulation | Real-time duty rates, documents checklist, compliance notes |
 
-Output: **Global Risk Score**, **Expected Cost Increase**, **Expected Delay**, commodity exposure,
-cost-forecast charts, route table, dependency graph, live news feed and recommended actions.
+Output: **Global Risk Score**, **Expected Cost Increase**, **Expected Delay**, commodity exposure, cost-forecast charts, route table, dependency graph, live news feed and recommended actions.
 
 ## How Tavily powers it
 
-Every intelligence agent queries the live web through the **Tavily REST API**
-(`@tavily/core` SDK), using the `search` and `extract` endpoints:
+Every intelligence agent queries the live web through the **Tavily REST API** (`@tavily/core` SDK), using the `search` and `extract` endpoints:
 
 - **`search`** — retrieves top web results for freight rates, port congestion, commodity news, tariffs, and weather forecasts. Supports `searchDepth` (`basic`/`advanced`), topic filtering, and configurable result counts.
 - **`extract`** — pulls structured content from a specific URL into raw text for deeper source analysis.
 
-`src/lib/tavily.ts` is the integration layer. If no API key is configured (or a call fails) it
-degrades gracefully to a realistic built-in dataset so the demo never breaks — shown as
-**● DEMO DATA** vs **● LIVE DATA** in the header.
+`src/lib/tavily.ts` is the integration layer. If no API key is configured (or a call fails) it degrades gracefully to a realistic built-in dataset so the demo never breaks — shown as **● DEMO DATA** vs **● LIVE DATA** in the header.
 
-## How Mistral AI powers it
+## How Google Gemini powers it
 
-All agent reasoning runs through **Mistral AI** via the OpenAI-compatible REST endpoint.
-`src/lib/openai.ts` wraps the Mistral API using the `openai` npm SDK pointed at
-`https://api.mistral.ai/v1` — no extra SDK needed. Every `jsonCompletion` and `textCompletion`
-call uses `mistral-small-latest` by default (configurable via `MISTRAL_MODEL`).
+All agent reasoning runs through **Google Gemini** via the OpenAI-compatible REST endpoint. 
+`src/lib/openai.ts` wraps the Gemini API using the `openai` npm SDK pointed at `https://generativelanguage.googleapis.com/v1beta/openai/` — no extra SDK needed. Every `jsonCompletion` and `textCompletion` call uses `gemini-2.5-flash` by default (configurable via `GEMINI_MODEL`).
 
 ## Architecture
 
@@ -66,7 +57,7 @@ src/
   lib/
     types.ts              # domain model (ShipmentInput, AnalysisResult, RiskFactor, Source, …)
     tavily.ts             # Tavily REST client + graceful mock fallback
-    openai.ts             # Mistral AI wrapper (OpenAI-compatible interface)
+    openai.ts             # Google Gemini wrapper (OpenAI-compatible interface)
     agents.ts             # product, 7 intelligence agents, synthesis, executive summary, action plan
     orchestrator.ts       # runs the pipeline, weighted risk score, streams SSE events
     drivers.ts            # seeds DependencyDriver objects from product materials + risk factors
@@ -86,12 +77,12 @@ The pipeline **streams** progress over Server-Sent Events, so the UI shows each 
 
 ## Tech
 
-Next.js 16 · React 19 · TypeScript · TailwindCSS v4 · Recharts · Framer Motion · Leaflet · Mistral AI · Tavily.
+Next.js 16 · React 19 · TypeScript · TailwindCSS v4 · Recharts · Framer Motion · Leaflet · Google Gemini · Tavily.
 
 ## Run it
 
 ```bash
-cp .env.example .env.local   # add MISTRAL_API_KEY and TAVILY_API_KEY
+cp .env.example .env.local   # add GEMINI_API_KEY and TAVILY_API_KEY
 npm install
 npm run dev                  # http://localhost:3000
 ```
@@ -104,12 +95,12 @@ Click a preset (e.g. *10,000 Plastic Chairs · Shanghai → LA*) and hit **Run R
 ### Environment
 
 | Var | Purpose |
-| --- | ------- |
-| `MISTRAL_API_KEY` | LLM reasoning for the agents (via Mistral AI) |
-| `MISTRAL_MODEL` | optional, defaults to `mistral-small-latest` |
+| --- | --- |
+| `GEMINI_API_KEY` | LLM reasoning for the agents (via Google Gemini) |
+| `GEMINI_MODEL` | optional, defaults to `gemini-2.5-flash` |
 | `TAVILY_API_KEY` | live web search/extract via Tavily REST API |
 | `TAVILY_SEARCH_DEPTH` | optional, `basic` (default) or `advanced` — controls depth and credit cost |
 
 ---
 
-Built with Next.js + Mistral AI + **Tavily**.
+Built with Next.js + Google Gemini + **Tavily**.
