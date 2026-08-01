@@ -1,106 +1,189 @@
-# Route Pilote 🧭
+# Route Pilote 🧭  
+### A Bloomberg Terminal for your supply chain.
 
-**A Bloomberg Terminal for your supply chain.**
+Route Pilote is an AI-powered supply chain risk intelligence platform that predicts freight delays, cost spikes, and disruption risks before they impact a shipment.
 
-Route Pilote predicts supply-chain disruptions, freight cost increases and shipping delays *before* they impact a shipment. Enter a product, origin, destination, weight and ship date — a fleet of AI agents scans live web intelligence (via Tavily) and returns a single actionable risk score, cost/delay forecasts, route optimization and recommended actions.
+It combines a fleet of AI agents, live web intelligence, and natural-language interaction to help users analyze shipments, compare alternatives, receive proactive alerts, and ask follow-up questions in real time.
 
-![flow](https://img.shields.io/badge/agents-12-2dd4bf) ![data](https://img.shields.io/badge/intelligence-Tavily-38bdf8) ![llm](https://img.shields.io/badge/reasoning-Gemini-ea4335)
+[🌐 Live Demo](https://route-pilote.vercel.app)  
+[🎥 1-Minute Tutorial Video](https://github.com/user-attachments/assets/e8b4c563-fa34-498a-ae57-084f8446a034)
+
 
 ---
 
-## What it does
+## 📽️ 1-Minute Tutorial Video
 
-Input a shipment → Route Pilote runs a multi-agent pipeline:
+> Replace this with your actual GitHub-hosted or YouTube video link.
 
-| Agent | Role |
-| ----- | ---- |
-| Product & Material | Category, HS codes, raw-material decomposition (e.g. Plastic 80% / Steel 15% / Packaging 5%) |
-| Commodity Intelligence | Oil, resin, steel, metals cost exposure |
-| Freight Intelligence | Ocean/air container rates, capacity, route disruptions |
-| Port Intelligence | Congestion, vessel queues, throughput |
-| Weather Intelligence | Typhoons, storms, seasonal disruption |
-| Geopolitical Intelligence | Tariffs, sanctions, Red Sea / conflict risk |
-| Supplier Intelligence | Manufacturing PMI, factory health |
-| Regulatory Intelligence | Customs & classification changes |
-| Cost / Route / Alert Engine | 30/60/90-day forecasts, mode comparison, alerts |
-| Executive Summary | Plain-language briefing |
-| Action Plan | Prioritized, deadline-sorted to-do list |
-| Port Recommendation | Live congestion comparison across alternative entry ports |
-| Tariff & Regulation | Real-time duty rates, documents checklist, compliance notes |
+[https://github.com/your-username/your-repo/assets/your-video-file](https://github.com/user-attachments/assets/e8b4c563-fa34-498a-ae57-084f8446a034)
 
-Output: **Global Risk Score**, **Expected Cost Increase**, **Expected Delay**, commodity exposure, cost-forecast charts, route table, dependency graph, live news feed and recommended actions.
+---
 
-## How Tavily powers it
+## ✨ What Route Pilote Does
 
-Every intelligence agent queries the live web through the **Tavily REST API** (`@tavily/core` SDK), using the `search` and `extract` endpoints:
+Route Pilote turns a shipment into an AI-driven decision workflow:
 
-- **`search`** — retrieves top web results for freight rates, port congestion, commodity news, tariffs, and weather forecasts. Supports `searchDepth` (`basic`/`advanced`), topic filtering, and configurable result counts.
-- **`extract`** — pulls structured content from a specific URL into raw text for deeper source analysis.
+- **Analyze a shipment** using natural language
+- **Run 12 specialized AI agents** in parallel
+- **Use live web intelligence** for freight, port, weather, tariff, and commodity signals
+- **Generate a risk score, cost forecast, delay forecast, and action plan**
+- **Warn users proactively** with an AI Predictive Alert Center
+- **Let users compare alternatives** with a What-If Scenario Simulator
+- **Answer follow-up questions** through the AI Shipment Copilot
 
-`src/lib/tavily.ts` is the integration layer. If no API key is configured (or a call fails) it degrades gracefully to a realistic built-in dataset so the demo never breaks — shown as **● DEMO DATA** vs **● LIVE DATA** in the header.
+---
 
-## How Google Gemini powers it
+## 🚀 Core Features
 
-All agent reasoning runs through **Google Gemini** via the OpenAI-compatible REST endpoint. 
-`src/lib/openai.ts` wraps the Gemini API using the `openai` npm SDK pointed at `https://generativelanguage.googleapis.com/v1beta/openai/` — no extra SDK needed. Every `jsonCompletion` and `textCompletion` call uses `gemini-2.5-flash` by default (configurable via `GEMINI_MODEL`).
+### 1) Multi-Agent Risk Analysis
+Route Pilote uses specialized agents to study:
+- Product & material breakdown
+- Commodity pricing
+- Freight rates
+- Port congestion
+- Weather disruption
+- Geopolitical risk
+- Supplier health
+- Regulatory and tariff changes
 
-## Architecture
+### 2) AI Predictive Alert Center
+Users receive proactive alerts when risk changes meaningfully, with:
+- severity indicators
+- reasons for the alert
+- suggested actions
+- auto-reroute support
+- alert history
 
-```
+### 3) What-If Scenario Simulator
+Users can compare alternate shipment decisions without redoing the analysis:
+- change shipping mode
+- change destination port
+- change departure date
+- compare cost vs delay vs risk
+- identify the best option
+
+### 4) AI Shipment Copilot
+Users can ask questions about the current shipment, such as:
+- Why is risk high?
+- Why was this port recommended?
+- How can cost be reduced?
+- What is the biggest risk?
+- Summarize the shipment in simple language
+
+### 5) Live Intelligence & Transparent Reasoning
+Every result is backed by live web research and source-aware analysis, making the system explainable and easy to trust.
+
+---
+
+## 🧠 How It Works
+
+```text
+Shipment Input
+   ↓
+Conversational Intake
+   ↓
+12 AI Agents
+   ↓
+Live Web Intelligence (Tavily)
+   ↓
+Gemini / Mistral Reasoning
+   ↓
+Risk Engine + Forecasts
+   ↓
+Dashboard + Alerts + Copilot + Scenarios
+
+
+🛠️ Tech Stack
+Frontend: Next.js 16, React 19, TypeScript
+Styling: Tailwind CSS v4
+Charts: Recharts
+Maps: Leaflet
+Motion: Framer Motion
+AI: Google Gemini, Mistral fallback
+Search Intelligence: Tavily
+Deployment: Vercel
+
+
+📁 Project Structure
 src/
   app/
-    page.tsx              # landing + conversational intake (IntakeChat) + live agent console + dashboard
-    layout.tsx            # global metadata + fonts
     api/
-      analyze/route.ts    # SSE streaming pipeline endpoint (POST → ReadableStream)
-      parse/route.ts      # lightweight intake NLP endpoint (POST → IntakeResult JSON)
-  lib/
-    types.ts              # domain model (ShipmentInput, AnalysisResult, RiskFactor, Source, …)
-    tavily.ts             # Tavily REST client + graceful mock fallback
-    openai.ts             # Google Gemini wrapper (OpenAI-compatible interface)
-    agents.ts             # product, 7 intelligence agents, synthesis, executive summary, action plan
-    orchestrator.ts       # runs the pipeline, weighted risk score, streams SSE events
-    drivers.ts            # seeds DependencyDriver objects from product materials + risk factors
-    geo.ts                # lightweight geocoding (city → lat/lng) for the RouteMap
-    utils.ts              # shared helpers
+      analyze/
+      copilot/
+      parse/
+    globals.css
+    layout.tsx
+    page.tsx
   components/
-    Header.tsx            # sticky header with LIVE/DEMO data badge and provider credit
-    IntakeChat.tsx        # conversational form — multi-turn NLP to collect ShipmentInput
-    AnalyzeForm.tsx       # quick-fill preset picker + form wrapper
-    AgentConsole.tsx      # real-time SSE agent status panel
-    Dashboard.tsx         # full results dashboard (Recharts charts, risk cards, news feed, maps)
-    DependencyGraph.tsx   # interactive supply-chain dependency graph (SVG)
-    RouteMap.tsx          # Leaflet map showing origin → destination route + alternative ports
-```
+    AgentConsole.tsx
+    AlertCenter.tsx
+    AnalyzeForm.tsx
+    Dashboard.tsx
+    DependencyGraph.tsx
+    Header.tsx
+    IntakeChat.tsx
+    RouteMap.tsx
+    ScenarioSimulator.tsx
+    ShipmentCopilot.tsx
+  lib/
+    agents.ts
+    drivers.ts
+    geo.ts
+    openai.ts
+    orchestrator.ts
+    tavily.ts
+    types.ts
+    utils.ts
 
-The pipeline **streams** progress over Server-Sent Events, so the UI shows each agent light up live.
 
-## Tech
 
-Next.js 16 · React 19 · TypeScript · TailwindCSS v4 · Recharts · Framer Motion · Leaflet · Google Gemini · Tavily.
-
-## Run it
-
-```bash
-cp .env.example .env.local   # add GEMINI_API_KEY and TAVILY_API_KEY
+▶️ Run Locally
+git clone https://github.com/Ruchit0807/Route-Pilote.git
+cd Route-Pilote
 npm install
-npm run dev                  # http://localhost:3000
-```
+npm run dev
 
-Click a preset (e.g. *10,000 Plastic Chairs · Shanghai → LA*) and hit **Run Risk Analysis**.
+Open:
+http://localhost:3000
 
-> Runs end-to-end with **no keys** using the built-in fallback dataset. Add keys for live web
-> intelligence and real LLM reasoning.
 
-### Environment
 
-| Var | Purpose |
-| --- | --- |
-| `GEMINI_API_KEY` | LLM reasoning for the agents (via Google Gemini) |
-| `GEMINI_MODEL` | optional, defaults to `gemini-2.5-flash` |
-| `TAVILY_API_KEY` | live web search/extract via Tavily REST API |
-| `TAVILY_SEARCH_DEPTH` | optional, `basic` (default) or `advanced` — controls depth and credit cost |
+🔑 Environment Variables
 
----
+Create a .env.local file and add:
 
-Built with Next.js + Google Gemini + **Tavily**.
+Variable	            Purpose
+GEMINI_API_KEY	      Primary AI reasoning model
+GEMINI_MODEL	        Optional Gemini model name
+MISTRAL_API_KEY	      Backup AI reasoning model
+MISTRAL_MODEL	        Optional Mistral model name
+TAVILY_API_KEY	      Live web search and extraction
+TAVILY_SEARCH_DEPTH	  Search depth setting
+
+
+🎯 Why This Project Stands Out
+
+Most logistics tools only tell you where a shipment is.
+
+Route Pilote tells you:
+
+what is likely to go wrong
+why it is happening
+how much it may cost
+how long it may delay the shipment
+what action to take next
+
+That makes it a predictive supply chain intelligence system, not just a tracking dashboard.
+
+
+🔮 Future Roadmap
+Continuous shipment monitoring
+Portfolio risk dashboard
+Exportable executive reports
+Smarter alert automation
+Expanded scenario comparisons
+
+
+📄 License
+
+This project is built for hackathon/demo use.
