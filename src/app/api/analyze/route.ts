@@ -1,4 +1,5 @@
 import { runAnalysis } from "@/lib/orchestrator";
+import { aiContext, getActiveModelUsed } from "@/lib/openai";
 import type { AnalyzeEvent, ShipmentInput } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -50,8 +51,11 @@ export async function POST(req: Request) {
       }, 10_000);
 
       try {
-        const result = await runAnalysis(input, send);
-        send({ type: "result", data: result });
+        await aiContext.run({ modelUsed: "Google Gemini" }, async () => {
+          const result = await runAnalysis(input, send);
+          result.aiModelUsed = getActiveModelUsed();
+          send({ type: "result", data: result });
+        });
       } catch (err) {
         console.error("[analyze] pipeline error:", err);
         send({ type: "error", message: err instanceof Error ? err.message : "Analysis failed" });

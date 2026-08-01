@@ -24,6 +24,7 @@ import {
 import { brightDataMode, getSearchLog, resetSearchLog } from "./tavily";
 import { buildDrivers } from "./drivers";
 import { geocode, haversineKm } from "./geo";
+import { getActiveModelUsed } from "./openai";
 import type {
   AnalysisResult,
   AnalyzeEvent,
@@ -233,6 +234,7 @@ export async function runAnalysis(
     searches,
     generatedAt: new Date().toISOString(),
     dataMode: brightDataMode(),
+    aiModelUsed: getActiveModelUsed(),
   };
 }
 

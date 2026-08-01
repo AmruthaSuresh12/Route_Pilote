@@ -15,7 +15,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import {
   AlertTriangle,
@@ -38,10 +38,12 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import type { AnalysisResult, DependencyDriver, PortOption, RiskFactor } from "@/lib/types";
+import type { AnalysisResult, DependencyDriver, PortOption, RiskFactor, PredictiveAlert } from "@/lib/types";
 import { categoryMeta, cn, fmtUsd, riskColor, riskLabel } from "@/lib/utils";
 
 import { DependencyGraph } from "./DependencyGraph";
+import { ScenarioSimulator, type Scenario } from "./ScenarioSimulator";
+import { ShipmentCopilot } from "./ShipmentCopilot";
 
 // Leaflet touches `window`, so load the map client-side only.
 const RouteMap = dynamic(() => import("./RouteMap").then((m) => m.RouteMap), {
@@ -167,13 +169,228 @@ function DriverCard({ d, onClick }: { d: DependencyDriver; onClick?: () => void 
   );
 }
 
-export function Dashboard({ result }: { result: AnalysisResult }) {
-  const { riskScore } = result;
+export function Dashboard({
+  result,
+  liveAlerts = [],
+  onOpenAlertCenter,
+  dynamicRiskScore,
+  overrideDelay,
+}: {
+  result: AnalysisResult;
+  liveAlerts?: PredictiveAlert[];
+  onOpenAlertCenter?: () => void;
+  dynamicRiskScore?: number;
+  overrideDelay?: [number, number];
+}) {
+  const baseMode = result.input.shippingMode || "Ocean (container)";
+  const basePort = result.portRecommendation?.recommended || "N/A";
+  const baseContainer = result.input.containerSize || "40ft HC";
+  const baseDate = result.input.shipDate || "August 2026";
+
+  const getAlternativePorts = useCallback(() => {
+    return result.portRecommendation?.options.map((o) => o.name) || [basePort];
+  }, [result, basePort]);
+
+  const getShippingModes = useCallback(() => {
+    return result.routes.map((r) => r.method);
+  }, [result]);
+
+  const defaultScenarios = useCallback((): Scenario[] => {
+    const alternativePorts = getAlternativePorts();
+    const otherPort = alternativePorts.find((p) => p !== basePort) || alternativePorts[0] || basePort;
+    const modes = getShippingModes();
+    const airMode = modes.find((m) => m.toLowerCase().includes("air")) || "Air Freight";
+
+    return [
+      {
+        id: "sim-1",
+        name: "Express Air Route",
+        shippingMode: airMode,
+        portName: basePort,
+        shipDateOffset: "0",
+        priority: "speed",
+        containerSize: "Pallets",
+        riskTolerance: "medium",
+      },
+      {
+        id: "sim-2",
+        name: "Congestion Avoidance",
+        shippingMode: baseMode,
+        portName: otherPort,
+        shipDateOffset: "1m",
+        priority: "balanced",
+        containerSize: baseContainer,
+        riskTolerance: "low",
+      },
+    ];
+  }, [baseMode, basePort, baseContainer, getAlternativePorts, getShippingModes]);
+
+  const [scenarios, setScenarios] = useState<Scenario[]>([]);
+  const [selectedScenarioId, setSelectedScenarioId] = useState<string>("baseline");
+
+  useEffect(() => {
+    setScenarios(defaultScenarios());
+  }, [defaultScenarios]);
+
+  // Client-side simulator engine
+  const simulateScenario = (s: Omit<Scenario, "id" | "name">) => {
+    const matchingRoute =
+      result.routes.find((r) => r.method.toLowerCase().includes(s.shippingMode.toLowerCase())) ||
+      result.routes[0];
+
+    const portOptions = result.portRecommendation?.options || [];
+    const selectedPortOpt =
+      portOptions.find((p) => p.name === s.portName) ||
+      portOptions.find((p) => p.recommended) ||
+      portOptions[0];
+
+    // 1. Calculate Cost
+    let cost = matchingRoute?.cost || 3000;
+
+    if (s.shippingMode.toLowerCase().includes("ocean") && selectedPortOpt) {
+      const baselineRecommendedPort = result.portRecommendation?.recommended || "";
+      const basePortOpt = portOptions.find((p) => p.name === baselineRecommendedPort);
+      if (basePortOpt) {
+        const diff = selectedPortOpt.freightCost - basePortOpt.freightCost;
+        cost += diff;
+      }
+    }
+
+    const getContainerMultiplier = (size: string) => {
+      switch (size) {
+        case "20ft": return 0.75;
+        case "40ft": return 0.95;
+        case "40ft HC": return 1.0;
+        case "LCL": return 0.6;
+        case "Pallets": return 0.5;
+        case "Air ULD": return 1.1;
+        default: return 1.0;
+      }
+    };
+
+    const containerMult = getContainerMultiplier(s.containerSize) / getContainerMultiplier(baseContainer);
+    cost = Math.round(cost * containerMult);
+
+    if (s.priority === "speed") {
+      cost = Math.round(cost * 1.05);
+    } else if (s.priority === "cost") {
+      cost = Math.round(cost * 0.97);
+    }
+
+    // 2. Calculate Transit Days & Expected Delay
+    const baseTransit = matchingRoute?.transitDays || 20;
+    let portWait = selectedPortOpt?.waitDays || 0;
+
+    if (!s.shippingMode.toLowerCase().includes("ocean")) {
+      portWait = Math.round(portWait * 0.1);
+    }
+
+    const [baseDelayLo, baseDelayHi] = result.expectedDelayDays;
+    let delayLo = baseDelayLo;
+    let delayHi = baseDelayHi;
+
+    let weatherNudge = 0;
+    if (s.shipDateOffset === "1m" || s.shipDateOffset === "2m") {
+      const baselineMonth = baseDate.toLowerCase();
+      if (
+        baselineMonth.includes("august") ||
+        baselineMonth.includes("september") ||
+        baselineMonth.includes("aug") ||
+        baselineMonth.includes("sep")
+      ) {
+        weatherNudge = -4;
+      }
+    }
+
+    const baseRecPortWait = result.portRecommendation?.options.find((p) => p.recommended)?.waitDays || 0;
+    const waitDiff = portWait - baseRecPortWait;
+    delayLo = Math.max(0, Math.round(delayLo + waitDiff + weatherNudge * 0.7));
+    delayHi = Math.max(delayLo + 1, Math.round(delayHi + waitDiff + weatherNudge));
+
+    const totalTransitLo = baseTransit + delayLo;
+    const totalTransitHi = baseTransit + delayHi;
+
+    // 3. Calculate Risk Score
+    let riskScore = result.riskScore;
+
+    if (s.shippingMode.toLowerCase().includes("air")) {
+      riskScore -= 18;
+    } else if (s.shippingMode.toLowerCase().includes("rail")) {
+      riskScore -= 8;
+    }
+
+    if (s.shippingMode.toLowerCase().includes("ocean") && selectedPortOpt) {
+      const recommendedPort = portOptions.find((p) => p.recommended);
+      const recCongestion = recommendedPort?.congestionScore || 50;
+      const selectedCongestion = selectedPortOpt.congestionScore;
+      const diff = selectedCongestion - recCongestion;
+      riskScore += Math.round(diff * 0.15);
+    }
+
+    if (s.shipDateOffset !== "0") {
+      const baselineMonth = baseDate.toLowerCase();
+      if (
+        baselineMonth.includes("august") ||
+        baselineMonth.includes("september") ||
+        baselineMonth.includes("aug") ||
+        baselineMonth.includes("sep")
+      ) {
+        if (s.shipDateOffset === "2w") riskScore -= 4;
+        else if (s.shipDateOffset === "1m") riskScore -= 10;
+        else if (s.shipDateOffset === "2m") riskScore -= 14;
+      }
+    }
+
+    riskScore = Math.max(10, Math.min(100, riskScore));
+
+    return {
+      cost,
+      transitLo: totalTransitLo,
+      transitHi: totalTransitHi,
+      delayLo,
+      delayHi,
+      riskScore,
+      selectedPortName: selectedPortOpt?.name || s.portName,
+    };
+  };
+
+  const activeScenario = scenarios.find((s) => s.id === selectedScenarioId);
+  const activeSim = activeScenario ? simulateScenario(activeScenario) : null;
+
+  const riskScore = activeSim
+    ? activeSim.riskScore
+    : (dynamicRiskScore !== undefined ? dynamicRiskScore : result.riskScore);
+
+  const [delayLo, delayHi] = activeSim
+    ? [activeSim.delayLo, activeSim.delayHi]
+    : (overrideDelay !== undefined ? overrideDelay : result.expectedDelayDays);
+
+  const currentActiveAlerts = liveAlerts && liveAlerts.length > 0
+    ? liveAlerts.filter((a) => a.status === "active")
+    : result.alerts.map((a, idx) => ({
+        id: `static-${idx}`,
+        title: a.title,
+        explanation: a.impact,
+        severity: a.severity === "high" ? ("high" as const) : a.severity === "medium" ? ("medium" as const) : ("low" as const),
+        status: "active" as const,
+      }));
+
   const sortedFactors = [...result.riskFactors].sort((a, b) => b.score - a.score);
   const recIdx = Math.max(0, result.routes.findIndex((r) => r.recommended));
+
+  const activeModeIdx = activeScenario
+    ? result.routes.findIndex((r) => r.method.toLowerCase().includes(activeScenario.shippingMode.toLowerCase()))
+    : -1;
+
   const [selectedRouteIdx, setSelectedRouteIdx] = useState(recIdx);
-  const recRoute = result.routes[selectedRouteIdx] ?? result.routes[recIdx] ?? result.routes[0];
-  const [delayLo, delayHi] = result.expectedDelayDays;
+  const currentRouteIdx = activeModeIdx !== -1 ? activeModeIdx : selectedRouteIdx;
+
+  const recRoute = result.routes[currentRouteIdx] ?? result.routes[recIdx] ?? result.routes[0];
+
+  const displayedRouteCost = activeSim ? activeSim.cost : recRoute.cost;
+  const displayedTransitDays = activeSim ? (activeSim.transitLo - activeSim.delayLo) : recRoute.transitDays;
+
+  const recommendedPortName = activeScenario ? activeScenario.portName : (result.portRecommendation?.recommended || "");
   const searches = result.searches ?? [];
 
   // What the user has already paid/locked shapes their real cost exposure.
@@ -352,7 +569,7 @@ export function Dashboard({ result }: { result: AnalysisResult }) {
           <div>
             <div className="text-[11px] mono text-muted mb-1">EXPECTED DELAY</div>
             <div className="text-4xl font-bold text-warn tabular-nums">
-              {result.expectedDelayDays[0]}–{result.expectedDelayDays[1]}
+              {delayLo}–{delayHi}
               <span className="text-lg font-normal text-muted ml-1">days</span>
             </div>
             <div className="text-xs text-muted mt-1">added to baseline transit — see Cost Forecast below for the cost side</div>
@@ -362,8 +579,8 @@ export function Dashboard({ result }: { result: AnalysisResult }) {
           {(() => {
             const start = parseShipDate(result.input.shipDate);
             if (!start || !recRoute) return null;
-            const lo = addDays(start, recRoute.transitDays + delayLo);
-            const hi = addDays(start, recRoute.transitDays + delayHi);
+            const lo = addDays(start, displayedTransitDays + delayLo);
+            const hi = addDays(start, displayedTransitDays + delayHi);
             return (
               <div className="mt-4 rounded-lg border border-accent/25 bg-accent/5 px-3 py-2.5 flex items-center gap-2.5">
                 <Ship className="size-4 text-accent shrink-0" />
@@ -376,7 +593,7 @@ export function Dashboard({ result }: { result: AnalysisResult }) {
                 <div className="ml-auto text-right">
                   <div className="text-[10px] mono text-muted">DOOR-TO-DOOR</div>
                   <div className="text-sm font-semibold tabular-nums">
-                    {recRoute.transitDays + delayLo}–{recRoute.transitDays + delayHi}d
+                    {displayedTransitDays + delayLo}–{displayedTransitDays + delayHi}d
                   </div>
                 </div>
               </div>
@@ -541,26 +758,42 @@ export function Dashboard({ result }: { result: AnalysisResult }) {
           </div>
         </Panel>
 
-        <Panel title="Active Alerts">
+        <Panel
+          title="Active Alerts"
+          action={
+            onOpenAlertCenter && (
+              <button
+                onClick={onOpenAlertCenter}
+                className="text-[10px] mono text-accent hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                Open Alert Center →
+              </button>
+            )
+          }
+        >
           <ul className="space-y-2.5">
-            {result.alerts.length === 0 && <li className="text-sm text-muted">No critical alerts.</li>}
-            {result.alerts.map((a, i) => (
-              <li key={i} className="flex gap-2.5">
-                <AlertTriangle
-                  className={cn(
-                    "size-4 mt-0.5 shrink-0",
-                    a.severity === "high" ? "text-danger" : a.severity === "medium" ? "text-warn" : "text-muted",
-                  )}
-                />
-                <div>
-                  <div className="text-sm font-medium leading-tight">{a.title}</div>
-                  <div className="text-[11px] text-muted mt-0.5">{a.impact}</div>
-                </div>
-              </li>
-            ))}
+            {currentActiveAlerts.length === 0 && <li className="text-sm text-muted">No active alerts.</li>}
+            {currentActiveAlerts.map((a, i) => {
+              const color = a.severity === "critical" || a.severity === "high"
+                ? "text-danger"
+                : a.severity === "medium"
+                ? "text-warn"
+                : "text-muted";
+              return (
+                <li key={a.id || i} className="flex gap-2.5">
+                  <AlertTriangle className={cn("size-4 mt-0.5 shrink-0", color)} />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium leading-tight truncate">{a.title}</div>
+                    <div className="text-[11px] text-muted mt-0.5 line-clamp-2 leading-relaxed">{a.explanation}</div>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </Panel>
       </div>
+
+      <ShipmentCopilot result={result} />
 
       {/* Risk factors grid */}
       <Panel title="Risk Factors by Category" className="order-7">
@@ -867,9 +1100,9 @@ export function Dashboard({ result }: { result: AnalysisResult }) {
 
           <div className="rounded-xl border border-border bg-panel-2/40 p-4 text-center">
             <div className="text-[11px] mono text-muted mb-1">COST · BASE TRANSIT</div>
-            <div className="text-2xl font-bold tabular-nums mb-1">{recRoute ? fmtUsd(recRoute.cost) : "—"}</div>
+            <div className="text-2xl font-bold tabular-nums mb-1">{recRoute ? fmtUsd(displayedRouteCost) : "—"}</div>
             <div className="text-3xl font-bold tabular-nums">
-              {recRoute?.transitDays ?? "—"}
+              {displayedTransitDays ?? "—"}
               <span className="text-base font-normal text-muted ml-1">days</span>
             </div>
           </div>
@@ -886,7 +1119,7 @@ export function Dashboard({ result }: { result: AnalysisResult }) {
             <div className="rounded-lg border border-border bg-panel-2/40 p-3 text-center">
               <div className="text-[10px] mono text-muted mb-1">EST. ARRIVAL</div>
               <div className="text-lg font-semibold tabular-nums">
-                {recRoute ? recRoute.transitDays + delayLo : "—"}–{recRoute ? recRoute.transitDays + delayHi : "—"}d
+                {recRoute ? displayedTransitDays + delayLo : "—"}–{recRoute ? displayedTransitDays + delayHi : "—"}d
               </div>
             </div>
           </div>
@@ -906,7 +1139,7 @@ export function Dashboard({ result }: { result: AnalysisResult }) {
             <div>
               <div className="text-sm">
                 Recommended entry port:{" "}
-                <span className="font-semibold text-accent">{result.portRecommendation.recommended}</span>
+                <span className="font-semibold text-accent">{recommendedPortName}</span>
               </div>
               <p className="text-[12px] text-foreground/80 mt-1 leading-snug">{result.portRecommendation.rationale}</p>
             </div>
@@ -922,14 +1155,14 @@ export function Dashboard({ result }: { result: AnalysisResult }) {
                   onClick={() => setSelectedPort(p)}
                   className={cn(
                     "text-left rounded-xl border p-3.5 transition cursor-pointer",
-                    p.recommended
+                    p.name === recommendedPortName
                       ? "border-accent/50 bg-accent/5 hover:bg-accent/10"
                       : "border-border bg-panel-2/40 hover:border-accent/40 hover:bg-panel-2/70",
                   )}
                 >
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-[13px] font-medium truncate">{p.name}</span>
-                    {p.recommended && (
+                    {p.name === recommendedPortName && (
                       <span className="text-[9px] mono px-1.5 py-0.5 rounded bg-accent/15 text-accent border border-accent/30 shrink-0">
                         BEST
                       </span>
@@ -1039,8 +1272,16 @@ export function Dashboard({ result }: { result: AnalysisResult }) {
         </div>
       </Panel>
 
+      <ScenarioSimulator
+        result={result}
+        scenarios={scenarios}
+        setScenarios={setScenarios}
+        selectedInsightId={selectedScenarioId}
+        setSelectedInsightId={setSelectedScenarioId}
+      />
+
       <div className="order-last text-center text-[11px] mono text-muted pt-2">
-        Generated {new Date(result.generatedAt).toLocaleString()} · {result.dataMode === "live" ? "live web intelligence" : "demo dataset"} · Route Pilote
+        Generated {new Date(result.generatedAt).toLocaleString()} · {result.dataMode === "live" ? "live web intelligence" : "demo dataset"} · Route Pilote · {result.aiModelUsed || "Google Gemini"}
       </div>
 
       {/* Risk factor detail modal */}

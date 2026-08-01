@@ -1,4 +1,14 @@
-export function Header({ dataMode }: { dataMode?: "live" | "mock" }) {
+import { Bell } from "lucide-react";
+
+export function Header({
+  dataMode,
+  unreadCount = 0,
+  onBellClick,
+}: {
+  dataMode?: "live" | "mock";
+  unreadCount?: number;
+  onBellClick?: () => void;
+}) {
   return (
     <header className="border-b border-border bg-panel/60 backdrop-blur sticky top-0 z-30">
       <div className="mx-auto max-w-7xl px-5 h-14 flex items-center justify-between">
@@ -35,8 +45,23 @@ export function Header({ dataMode }: { dataMode?: "live" | "mock" }) {
               {dataMode === "live" ? "● LIVE DATA" : "● DEMO DATA"}
             </span>
           )}
+          {onBellClick && (
+            <button
+              onClick={onBellClick}
+              className="relative p-2 rounded-lg border border-border bg-panel-2/40 hover:bg-panel-2/80 hover:border-accent/40 text-foreground transition duration-200 cursor-pointer flex items-center justify-center"
+              aria-label="Notification Center"
+            >
+              <Bell className="size-4" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 flex h-4.5 w-4.5 items-center justify-center rounded-full bg-danger text-[9px] font-bold text-white tabular-nums shadow-sm">
+                  {unreadCount}
+                </span>
+              )}
+            </button>
+          )}
         </div>
       </div>
     </header>
   );
 }
+

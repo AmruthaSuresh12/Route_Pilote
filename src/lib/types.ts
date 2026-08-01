@@ -203,6 +203,7 @@ export interface AnalysisResult {
   searches: SearchRecord[];
   generatedAt: string;
   dataMode: "live" | "mock";
+  aiModelUsed?: string;
 }
 
 // Server-sent event payloads streamed to the dashboard
@@ -211,3 +212,25 @@ export type AnalyzeEvent =
   | { type: "log"; message: string }
   | { type: "result"; data: AnalysisResult }
   | { type: "error"; message: string };
+
+export interface AlertTimelineEvent {
+  event: string;
+  timestamp: string;
+  description: string;
+}
+
+export interface PredictiveAlert {
+  id: string;
+  title: string;
+  category: "freight" | "port" | "weather" | "commodity" | "supplier" | "regulatory" | "tariff" | "geopolitical";
+  severity: "critical" | "high" | "medium" | "low";
+  explanation: string;
+  why: string;
+  businessImpact: string;
+  recommendation: string;
+  confidence: number; // 0-100
+  timestamp: string;
+  status: "active" | "resolved";
+  timeline: AlertTimelineEvent[];
+}
+
